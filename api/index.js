@@ -19,34 +19,40 @@ module.exports = async (req, res) => {
     const data = await response.json();
     const token = data.access_token;
 
-    if (!token) {
-      return res.status(400).send("Hata: GitHub'dan anahtar alınamadı. Lütfen ID ve Secret'ı Vercel'den kontrol edin.");
-    }
-
     const content = `
     <html>
-    <head><title>Yetkilendirme Tamam</title></head>
-    <body>
-      <div style="text-align:center; margin-top:50px; font-family:sans-serif;">
-        <h2>Giriş Başarılı!</h2>
-        <p>Yönetim paneline dönülüyor, lütfen bekleyin...</p>
-      </div>
+    <head><title>Giriş Onayı</title></head>
+    <body style="text-align:center; font-family:sans-serif; padding-top:50px;">
+      <h2>Giriş Başarılı!</h2>
+      <p id="status">Ana pencereye bağlanılıyor...</p>
+      <button id="manualBtn" style="display:none; padding:10px 20px; background:#24292e; color:white; border:none; border-radius:5px;">
+        Panele Dönmek İçin Buraya Tıkla
+      </button>
+
       <script>
         (function() {
-          const message = "authorization:github:success:" + JSON.stringify({
-            token: "${token}",
-            provider: "github"
-          });
+          const token = "${token}";
+          const message = "authorization:github:success:" + JSON.stringify({token: token, provider: "github"});
           
-          // Ana pencereye anahtarı fırlat
-          if (window.opener) {
-            window.opener.postMessage(message, "*");
-            // 500ms bekle ve kapat
-            setTimeout(() => { window.close(); }, 500);
-          } else {
-            // Eğer pencere kapanmazsa kullanıcıyı uyar
-            document.body.innerHTML += "<p style='color:red'>Hata: Ana pencere bağlantısı koptu. Lütfen giriş sayfasını yenileyip tekrar deneyin.</p>";
+          function sendAndClose() {
+            if (window.opener) {
+              // 1. Önce "buradayım" de
+              window.opener.postMessage("authorizing:github", "*");
+              // 2. Anahtarı teslim et
+              window.opener.postMessage(message, "*");
+              document.getElementById("status").innerText = "Anahtar teslim edildi! Kapatılıyor...";
+              setTimeout(() => { window.close(); }, 1500);
+            } else {
+              document.getElementById("status").style.color = "red";
+              document.getElementById("status").innerText = "Hata: Ana sayfa ile bağlantı kurulamadı.";
+              document.getElementById("manualBtn").style.display = "inline-block";
+            }
           }
+
+          // Tabletin yavaşlığına karşı 1 saniye bekleyip gönder
+          setTimeout(sendAndClose, 1000);
+
+          document.getElementById("manualBtn").onclick = sendAndClose;
         })()
       </script>
     </body>
@@ -56,6 +62,6 @@ module.exports = async (req, res) => {
     return res.send(content);
 
   } catch (e) {
-    res.status(500).send("Sistem Hatası: " + e.message);
+    res.status(500).send("Hata: " + e.message);
   }
 };
